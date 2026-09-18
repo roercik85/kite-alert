@@ -23,6 +23,7 @@ class AlertState:
     def __init__(self, path: str | Path):
         self.path = Path(path)
         self._active: dict[str, float] = {}
+        self._previous: dict[str, float | None] = {}
         self._peak_value: float | None = None
         self._load()
 
@@ -95,5 +96,24 @@ class AlertState:
             fired_at = self._active.get(alert.key)
             if fired_at is None or (now - fired_at) >= cooldown_seconds:
                 to_send.append(alert)
+                self._previous[alert.key] = fired_at
                 self._active[alert.key] = now
         return to_send
+
+    def rollback(self, alerts: Iterable[Alert]) -> None:
+        """Undo the fired marks for alerts whose delivery failed.
+
+        An alert is marked as sent before the notifier runs, so a sink that
+        errors would otherwise bury it until the cooldown lapses - losing a
+        stop-loss notification outright. Rolling back lets the next run retry.
+
+        When several sinks are configured and only one failed, the retry sends
+        a duplicate to the sinks that succeeded. That is the deliberate
+        trade-off: a repeated alert is recoverable, a missed one is not.
+        """
+        for alert in alerts:
+            previous = self._previous.get(alert.key)
+            if previous is None:
+                self._active.pop(alert.key, None)
+            else:
+                self._active[alert.key] = previous

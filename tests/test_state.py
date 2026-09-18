@@ -112,3 +112,50 @@ class PeakTrackingTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RollbackTests(unittest.TestCase):
+    """A failed delivery must not count as sent."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.path = Path(self._tmp.name) / "state.json"
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def test_rollback_lets_a_first_alert_retry(self):
+        state = AlertState(self.path)
+        sent = state.select_new([A], cooldown_seconds=3600, now=0)
+        self.assertEqual(sent, [A])
+        state.rollback(sent)
+        self.assertEqual(state.select_new([A], cooldown_seconds=3600, now=1), [A])
+
+    def test_rollback_restores_an_earlier_fired_timestamp(self):
+        state = AlertState(self.path)
+        state.select_new([A], cooldown_seconds=100, now=0)
+        # Cooldown lapses, so it sends again - then delivery fails.
+        resent = state.select_new([A], cooldown_seconds=100, now=200)
+        self.assertEqual(resent, [A])
+        state.rollback(resent)
+        # The original timestamp is back, so the cooldown is measured from it.
+        self.assertEqual(state.select_new([A], cooldown_seconds=100, now=250), [A])
+        self.assertEqual(state.select_new([A], cooldown_seconds=100, now=260), [])
+
+    def test_rollback_of_one_alert_leaves_the_other_marked(self):
+        state = AlertState(self.path)
+        state.select_new([A, B], cooldown_seconds=3600, now=0)
+        state.rollback([A])
+        self.assertEqual(state.select_new([A, B], cooldown_seconds=3600, now=1), [A])
+
+    def test_rollback_survives_save_and_reload(self):
+        state = AlertState(self.path)
+        sent = state.select_new([A], cooldown_seconds=3600, now=0)
+        state.rollback(sent)
+        state.save()
+        self.assertEqual(AlertState(self.path).select_new([A], cooldown_seconds=3600, now=1), [A])
+
+    def test_rollback_is_safe_for_unknown_alerts(self):
+        state = AlertState(self.path)
+        state.rollback([A])
+        self.assertEqual(state.select_new([A], cooldown_seconds=3600, now=0), [A])

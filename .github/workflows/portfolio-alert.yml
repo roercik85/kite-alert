@@ -1,0 +1,69 @@
+name: portfolio-alert
+
+# Scheduled workflows only run from the repository's default branch, so this
+# file has to be merged into main before any automatic run happens.
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Never let two checks overlap: they would both read the same restored state
+# and could notify twice for the same breach.
+concurrency:
+  group: portfolio-alert
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install --disable-pip-version-check -r requirements.txt
+
+      # De-duplication and the drawdown peak live in this file. Each run saves
+      # under a unique key and restores the newest one matching the prefix.
+      - name: Restore alert state
+        uses: actions/cache/restore@v4
+        with:
+          path: alert_state.json
+          key: portfolio-alert-state-${{ github.run_id }}
+          restore-keys: portfolio-alert-state-
+
+      - name: Write config from secret
+        env:
+          PORTFOLIO_CONFIG: ${{ secrets.PORTFOLIO_CONFIG }}
+        run: |
+          if [ -z "$PORTFOLIO_CONFIG" ]; then
+            echo "::error::Secret PORTFOLIO_CONFIG is not set. Add your portfolio.json as a repository secret."
+            exit 1
+          fi
+          printf '%s' "$PORTFOLIO_CONFIG" > portfolio.json
+
+      - name: Validate config
+        run: python -m portfolio_alert --check-config
+
+      # Exits non-zero if a notification could not be delivered, so a silent
+      # delivery failure shows up as a failed run. The alert itself is rolled
+      # back and retried on the next run.
+      - name: Check portfolio
+        run: python -m portfolio_alert --quiet
+
+      - name: Save alert state
+        # Save even when the check failed, so a partial run does not replay
+        # every alert from scratch next time.
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: alert_state.json
+          key: portfolio-alert-state-${{ github.run_id }}

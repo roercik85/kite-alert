@@ -155,14 +155,53 @@ drawdown to today's value without losing anything else.
 
 ## Scheduling
 
-Every 15 minutes via cron:
+Nothing is checked unless something runs the tool on a schedule. Subscribing a
+phone to a topic does not by itself poll anything.
+
+### GitHub Actions (no machine of your own)
+
+`.github/workflows/portfolio-alert.yml` runs the check every 30 minutes.
+
+1. Add your finished `portfolio.json` as a repository secret named
+   `PORTFOLIO_CONFIG` (Settings → Secrets and variables → Actions → New
+   repository secret). Paste the whole file as the value. This keeps holdings
+   out of the repository while still letting the run read them.
+2. Merge the workflow into the default branch. **Scheduled workflows only run
+   from the default branch** — on a feature branch it will never fire on its
+   own.
+3. Trigger it once by hand from the Actions tab (*Run workflow*) to confirm the
+   setup before relying on the schedule.
+
+De-duplication state and the drawdown peak are carried between runs through the
+Actions cache. If that cache is ever evicted the tool simply re-notifies on
+conditions that are still true; it does not lose money-relevant state.
+
+Two limits worth knowing. GitHub schedules on a best-effort basis and delays
+runs under load, so treat the interval as approximate. And runners share
+outbound IP addresses, so the free ntfy.sh tier — whose message quota is
+per-IP — can intermittently answer `429`. A failed delivery is rolled back and
+retried on the next run rather than being silently dropped, but if it recurs,
+move to a Discord webhook, an ntfy access token, or a self-hosted ntfy server.
+
+### Your own machine
 
 ```cron
 */15 * * * * cd /path/to/repo && .venv/bin/python -m portfolio_alert --quiet >> alerts.log 2>&1
 ```
 
 Use absolute paths — config and state files resolve against the working
-directory.
+directory. This runs from your own IP, which avoids the shared-quota problem
+above, but only while the machine is awake.
+
+## Delivery failures
+
+An alert is marked as sent before the notifier runs. If every sink fails, that
+mark is rolled back so the next run retries instead of sitting on an alert
+nobody received, and the process exits non-zero.
+
+When several sinks are configured and only one fails, the retry sends a
+duplicate to the sinks that already succeeded. That is deliberate: a repeated
+alert is recoverable, a missed stop-loss is not.
 
 ## Tests
 

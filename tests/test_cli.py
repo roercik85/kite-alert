@@ -178,3 +178,48 @@ class FailureTests(CliTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class NotifierFailureTests(CliTestCase):
+    """A sink that errors must leave the alert pending, not swallow it."""
+
+    def setUp(self):
+        super().setUp()
+        cfg = dict(CONFIG, notifiers=[{"type": "webhook", "url": "https://hooks.example/x"}])
+        self.config_path.write_text(json.dumps(cfg), encoding="utf-8")
+
+    def run_with_webhook(self, fail):
+        import portfolio_alert.notify as notify_module
+
+        sent = []
+
+        class FakeResp:
+            def raise_for_status(self):
+                if fail:
+                    raise RuntimeError("429 quota reached")
+
+        def fake_post(url, json=None, timeout=None, **kwargs):
+            sent.append(json)
+            return FakeResp()
+
+        original = notify_module.requests.post
+        notify_module.requests.post = fake_post
+        try:
+            return self.run_cli("--quiet"), sent
+        finally:
+            notify_module.requests.post = original
+
+    def test_failed_delivery_reports_error(self):
+        (code, _, err), _ = self.run_with_webhook(fail=True)
+        self.assertEqual(code, cli.EXIT_ERROR)
+        self.assertIn("notifier failed", err)
+
+    def test_failed_delivery_retries_on_the_next_run(self):
+        self.run_with_webhook(fail=True)
+        _, sent = self.run_with_webhook(fail=False)
+        self.assertEqual(len(sent), 1, "alert was swallowed instead of retried")
+
+    def test_successful_delivery_is_not_repeated(self):
+        self.run_with_webhook(fail=False)
+        _, sent = self.run_with_webhook(fail=False)
+        self.assertEqual(sent, [], "a delivered alert should stay quiet")

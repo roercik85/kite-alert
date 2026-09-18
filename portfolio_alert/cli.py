@@ -106,6 +106,9 @@ def run_once(args: argparse.Namespace) -> int:
         for error in errors:
             print(f"notifier failed: {error}", file=sys.stderr)
         if errors:
+            # Delivery failed, so do not let these count as sent: the next run
+            # must retry rather than sit on an alert nobody received.
+            state.rollback(to_send)
             exit_code = EXIT_ERROR
         elif args.fail_on_alert:
             exit_code = EXIT_ALERTS
