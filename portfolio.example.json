@@ -1,6 +1,7 @@
 {
   "vs_currency": "usd",
   "cooldown_minutes": 720,
+  "redact_amounts": true,
   "positions": [
     {
       "symbol": "AKT",
@@ -110,6 +111,10 @@
   "notifiers": [
     {
       "type": "console"
+    },
+    {
+      "type": "ntfy",
+      "topic": "replace-me-with-a-generated-random-topic"
     }
   ]
 }

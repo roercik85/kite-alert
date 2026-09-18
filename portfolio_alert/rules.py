@@ -112,7 +112,24 @@ def _fmt_pct(value: float) -> str:
     return f"{value:+.1f}%"
 
 
-def evaluate_position(snapshot: PositionSnapshot, vs_currency: str) -> list[Alert]:
+def _pnl_body(symbol, price_text, pnl_pct, position, snapshot, unit, redact):
+    """Body for a stop-loss / take-profit alert.
+
+    Prices, thresholds and percentages are public information. The absolute
+    unrealised amount is not: it reveals position size, so redaction drops it.
+    """
+    body = (
+        f"{symbol} at {price_text} is {_fmt_pct(pnl_pct)} vs average cost "
+        f"{_fmt_price(position.avg_cost)} {unit}."
+    )
+    if redact:
+        return body
+    return f"{body} Unrealised P&L {_fmt_money(snapshot.pnl_abs)} {unit}."
+
+
+def evaluate_position(
+    snapshot: PositionSnapshot, vs_currency: str, redact: bool = False
+) -> list[Alert]:
     alerts: list[Alert] = []
     position = snapshot.position
     rules = position.alerts
@@ -147,11 +164,7 @@ def evaluate_position(snapshot: PositionSnapshot, vs_currency: str) -> list[Aler
                 key=f"{symbol}:stop_loss:{rules.stop_loss_pct}",
                 severity=CRITICAL,
                 title=f"{symbol} hit stop-loss ({_fmt_pct(pnl_pct)})",
-                body=(
-                    f"{symbol} at {price_text} is {_fmt_pct(pnl_pct)} vs average cost "
-                    f"{_fmt_price(position.avg_cost)} {unit}. "
-                    f"Unrealised P&L {_fmt_money(snapshot.pnl_abs)} {unit}."
-                ),
+                body=_pnl_body(symbol, price_text, pnl_pct, position, snapshot, unit, redact),
             )
         )
 
@@ -165,11 +178,7 @@ def evaluate_position(snapshot: PositionSnapshot, vs_currency: str) -> list[Aler
                 key=f"{symbol}:take_profit:{rules.take_profit_pct}",
                 severity=INFO,
                 title=f"{symbol} hit take-profit ({_fmt_pct(pnl_pct)})",
-                body=(
-                    f"{symbol} at {price_text} is {_fmt_pct(pnl_pct)} vs average cost "
-                    f"{_fmt_price(position.avg_cost)} {unit}. "
-                    f"Unrealised P&L {_fmt_money(snapshot.pnl_abs)} {unit}."
-                ),
+                body=_pnl_body(symbol, price_text, pnl_pct, position, snapshot, unit, redact),
             )
         )
 
@@ -233,6 +242,7 @@ def evaluate_portfolio(
     alerts: list[Alert] = []
     rules = config.portfolio
     unit = config.vs_currency.upper()
+    redact = config.redact_amounts
     total = snapshot.total_value
 
     if rules.value_below is not None and total <= rules.value_below:
@@ -240,8 +250,16 @@ def evaluate_portfolio(
             Alert(
                 key=f"portfolio:value_below:{rules.value_below}",
                 severity=CRITICAL,
-                title=f"Portfolio below {_fmt_money(rules.value_below)} {unit}",
-                body=f"Total portfolio value is {_fmt_money(total)} {unit}.",
+                title=(
+                    "Portfolio below its floor"
+                    if redact
+                    else f"Portfolio below {_fmt_money(rules.value_below)} {unit}"
+                ),
+                body=(
+                    "Total portfolio value is below the configured floor."
+                    if redact
+                    else f"Total portfolio value is {_fmt_money(total)} {unit}."
+                ),
             )
         )
 
@@ -250,8 +268,16 @@ def evaluate_portfolio(
             Alert(
                 key=f"portfolio:value_above:{rules.value_above}",
                 severity=INFO,
-                title=f"Portfolio above {_fmt_money(rules.value_above)} {unit}",
-                body=f"Total portfolio value is {_fmt_money(total)} {unit}.",
+                title=(
+                    "Portfolio above its target"
+                    if redact
+                    else f"Portfolio above {_fmt_money(rules.value_above)} {unit}"
+                ),
+                body=(
+                    "Total portfolio value is above the configured target."
+                    if redact
+                    else f"Total portfolio value is {_fmt_money(total)} {unit}."
+                ),
             )
         )
 
@@ -267,8 +293,12 @@ def evaluate_portfolio(
                 severity=CRITICAL,
                 title=f"Portfolio P&L at {_fmt_pct(pnl_pct)}",
                 body=(
-                    f"Total value {_fmt_money(total)} {unit} against cost "
-                    f"{_fmt_money(snapshot.total_cost)} {unit}."
+                    "Total value is below total cost."
+                    if redact
+                    else (
+                        f"Total value {_fmt_money(total)} {unit} against cost "
+                        f"{_fmt_money(snapshot.total_cost)} {unit}."
+                    )
                 ),
             )
         )
@@ -282,8 +312,12 @@ def evaluate_portfolio(
                     severity=CRITICAL,
                     title=f"Portfolio drawdown {drawdown:.1f}% from peak",
                     body=(
-                        f"Value {_fmt_money(total)} {unit} is {drawdown:.1f}% below the "
-                        f"observed peak of {_fmt_money(peak_value)} {unit}."
+                        f"Portfolio is {drawdown:.1f}% below its observed peak."
+                        if redact
+                        else (
+                            f"Value {_fmt_money(total)} {unit} is {drawdown:.1f}% below the "
+                            f"observed peak of {_fmt_money(peak_value)} {unit}."
+                        )
                     ),
                 )
             )
@@ -299,7 +333,9 @@ def evaluate_all(
 ) -> list[Alert]:
     alerts: list[Alert] = []
     for position_snapshot in snapshot.positions:
-        alerts.extend(evaluate_position(position_snapshot, config.vs_currency))
+        alerts.extend(
+            evaluate_position(position_snapshot, config.vs_currency, config.redact_amounts)
+        )
     alerts.extend(evaluate_market_guards(config, quotes))
     alerts.extend(evaluate_portfolio(snapshot, config, peak_value))
     alerts.sort(key=lambda alert: (_SEVERITY_ORDER.get(alert.severity, 9), alert.key))

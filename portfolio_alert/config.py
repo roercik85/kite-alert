@@ -74,6 +74,7 @@ class Config:
     cooldown_minutes: int = 720
     coingecko_api_key: str | None = None
     coingecko_plan: str = "demo"
+    redact_amounts: bool = False
 
     @property
     def coingecko_ids(self) -> list[str]:
@@ -216,6 +217,7 @@ def parse_config(raw: dict[str, Any]) -> Config:
         cooldown_minutes=cooldown,
         coingecko_api_key=raw.get("coingecko_api_key"),
         coingecko_plan=plan,
+        redact_amounts=bool(raw.get("redact_amounts", False)),
     )
 
 

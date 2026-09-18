@@ -99,7 +99,10 @@ def run_once(args: argparse.Namespace) -> int:
     exit_code = EXIT_OK
     if to_send:
         notifiers = build_notifiers(config.notifiers)
-        errors = dispatch(notifiers, to_send, report)
+        # The table carries totals and position values. With redaction on it
+        # stays local: it is printed to stdout above but never sent to a sink.
+        outbound_report = "" if config.redact_amounts else report
+        errors = dispatch(notifiers, to_send, outbound_report)
         for error in errors:
             print(f"notifier failed: {error}", file=sys.stderr)
         if errors:

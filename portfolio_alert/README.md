@@ -110,6 +110,39 @@ Exit codes: `0` success, `1` error, `2` with `--fail-on-alert` when something fi
 
 A failing notifier is reported on stderr but does not stop the others.
 
+## Privacy
+
+`ntfy.sh` and webhook endpoints are third-party servers, and an ntfy topic is
+readable by anyone who knows or guesses its name. Two settings limit what a
+push actually discloses.
+
+**Pick an unguessable topic.** Generate one rather than choosing it:
+
+```bash
+python3 -c "import secrets,string; print('pa-'+''.join(secrets.choice(string.ascii_lowercase+string.digits) for _ in range(28)))"
+```
+
+**Turn on redaction.** With `"redact_amounts": true` at the top level of the
+config, currency amounts are stripped from everything that leaves the machine,
+while prices, thresholds and percentages — all public information — are kept,
+so alerts stay actionable:
+
+| | Sent |
+|---|---|
+| without redaction | `AKT at 0.42 USD is -37.6% vs average cost 0.6727 USD. Unrealised P&L -1,365.61 USD.` |
+| with redaction | `AKT at 0.42 USD is -37.6% vs average cost 0.6727 USD.` |
+| without redaction | `Value 7,831.56 USD is 23.3% below the observed peak of 10,204.91 USD.` |
+| with redaction | `Portfolio is 23.3% below its observed peak.` |
+
+Redaction also withholds the portfolio table from every sink, including the
+webhook payload that would otherwise embed it. The full table is still printed
+to your own terminal — redaction governs what leaves the machine, not what you
+see locally.
+
+What redaction cannot hide is which coins you watch: a push naming AKT says you
+follow AKT. To conceal that too, self-host ntfy by pointing `server` at your own
+instance, or add a `token` for an access-controlled topic.
+
 ## No alert spam
 
 An alert fires once when its condition becomes true and then stays quiet. It
