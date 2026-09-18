@@ -1,0 +1,115 @@
+{
+  "vs_currency": "usd",
+  "cooldown_minutes": 720,
+  "positions": [
+    {
+      "symbol": "AKT",
+      "coingecko_id": "akash-network",
+      "amount": 1000,
+      "avg_cost": 0.6727,
+      "note": "Placeholder amount - replace with your own holding.",
+      "alerts": {
+        "below": 0.45,
+        "above": 0.7,
+        "stop_loss_pct": -35,
+        "take_profit_pct": 25,
+        "move_24h_pct": 15
+      }
+    },
+    {
+      "symbol": "LINK",
+      "coingecko_id": "chainlink",
+      "amount": 100,
+      "avg_cost": 10.06,
+      "alerts": {
+        "below": 10.5,
+        "above": 15.0,
+        "stop_loss_pct": -25,
+        "move_24h_pct": 12
+      }
+    },
+    {
+      "symbol": "ONDO",
+      "coingecko_id": "ondo-finance",
+      "amount": 1000,
+      "avg_cost": 0.2815,
+      "alerts": {
+        "below": 0.32,
+        "above": 0.5,
+        "take_profit_pct": 60,
+        "move_24h_pct": 15
+      }
+    },
+    {
+      "symbol": "TAO",
+      "coingecko_id": "bittensor",
+      "amount": 1,
+      "avg_cost": 208.21,
+      "alerts": {
+        "below": 200,
+        "above": 320,
+        "stop_loss_pct": -25,
+        "move_24h_pct": 15
+      }
+    },
+    {
+      "symbol": "ZEC",
+      "coingecko_id": "zcash",
+      "amount": 1,
+      "avg_cost": 536.52,
+      "note": "Parabolic move - the below threshold protects open profit.",
+      "alerts": {
+        "below": 1150,
+        "above": 1900,
+        "take_profit_pct": 150,
+        "move_24h_pct": 15
+      }
+    },
+    {
+      "symbol": "GRASS",
+      "coingecko_id": "grass",
+      "amount": 1000,
+      "avg_cost": 0.4063,
+      "alerts": {
+        "below": 0.28,
+        "above": 0.45,
+        "stop_loss_pct": -35,
+        "move_24h_pct": 20
+      }
+    },
+    {
+      "symbol": "GRT",
+      "coingecko_id": "the-graph",
+      "amount": 1000,
+      "avg_cost": 0.02344,
+      "alerts": {
+        "below": 0.017,
+        "above": 0.026,
+        "move_24h_pct": 20
+      }
+    }
+  ],
+  "market_guards": [
+    {
+      "symbol": "BTC",
+      "coingecko_id": "bitcoin",
+      "below": 73000,
+      "note": "Losing this level is widely read as a regime change for altcoins."
+    },
+    {
+      "symbol": "ETH",
+      "coingecko_id": "ethereum",
+      "below": 2200,
+      "note": "Altcoin beta usually tracks ETH more closely than BTC."
+    }
+  ],
+  "portfolio_alerts": {
+    "drawdown_pct": 15,
+    "total_pnl_below_pct": 0
+  },
+  "notifiers": [
+    {
+      "type": "console"
+    }
+  ]
+}

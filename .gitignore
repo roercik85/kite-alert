@@ -1,0 +1,9 @@
+# Real portfolio holdings stay local — never commit amounts or cost basis.
+portfolio.json
+alert_state.json
+
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
