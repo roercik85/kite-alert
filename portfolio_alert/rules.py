@@ -71,6 +71,37 @@ class PortfolioSnapshot:
             return None
         return (self.total_value / cost - 1.0) * 100.0
 
+    def change_24h(self) -> tuple[float, float] | None:
+        """Portfolio-wide 24h move as (percent, share of value covered).
+
+        Reconstructs yesterday's value from each position's own 24h change,
+        which weights every holding by size - a 13% move in a 3% position is
+        not the same event as a 13% move in a 30% one.
+
+        Positions without change data are left out of both sides rather than
+        silently treated as flat, and the share they leave uncovered is
+        reported so a partial figure is never mistaken for a complete one.
+        Returns None when nothing can be computed.
+        """
+        now = 0.0
+        yesterday = 0.0
+        for item in self.positions:
+            if item.change_24h_pct is None:
+                continue
+            factor = 1.0 + item.change_24h_pct / 100.0
+            if factor <= 0:
+                # A -100% move gives no finite prior price; skip rather than
+                # divide by zero.
+                continue
+            now += item.value
+            yesterday += item.value / factor
+
+        if yesterday <= 0:
+            return None
+        total = self.total_value
+        covered = (now / total * 100.0) if total > 0 else 0.0
+        return (now / yesterday - 1.0) * 100.0, covered
+
     def weight(self, snapshot: PositionSnapshot) -> float | None:
         total = self.total_value
         if total <= 0:
@@ -302,6 +333,30 @@ def evaluate_portfolio(
                 ),
             )
         )
+
+    if rules.move_24h_pct:
+        measured = snapshot.change_24h()
+        if measured is not None:
+            change, covered = measured
+            direction = "up" if change > 0 else "down"
+            widest = max(rules.move_24h_pct)
+            partial = "" if covered >= 99.5 else f" Based on {covered:.0f}% of portfolio value."
+            for band in rules.move_24h_pct:
+                if abs(change) < band:
+                    continue
+                alerts.append(
+                    Alert(
+                        key=f"portfolio:move24h:{direction}:{band}",
+                        # The widest configured band, downward, is the one
+                        # worth a louder notification; the rest are context.
+                        severity=WARN if (direction == "down" and band == widest) else INFO,
+                        title=f"Portfolio {direction} {abs(change):.1f}% in 24h ({band:g}% band)",
+                        body=(
+                            f"Total portfolio value moved {change:+.1f}% over 24h, "
+                            f"crossing the {band:g}% band.{partial}"
+                        ),
+                    )
+                )
 
     if rules.drawdown_pct is not None and peak_value and peak_value > 0:
         drawdown = (1.0 - total / peak_value) * 100.0

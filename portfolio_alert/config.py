@@ -62,6 +62,7 @@ class PortfolioAlerts:
     value_above: float | None = None
     drawdown_pct: float | None = None
     total_pnl_below_pct: float | None = None
+    move_24h_pct: tuple[float, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -104,6 +105,22 @@ def _optional_float(raw: dict[str, Any], key: str, where: str) -> float | None:
     if raw.get(key) is None:
         return None
     return _as_float(raw[key], f"{where}.{key}")
+
+
+def _parse_move_bands(raw: dict[str, Any], where: str) -> tuple[float, ...]:
+    """Accept a single number or a list of them, e.g. 5 or [2, 5]."""
+    value = raw.get("move_24h_pct")
+    if value is None:
+        return ()
+    values = value if isinstance(value, list) else [value]
+    bands = []
+    for i, item in enumerate(values):
+        band = _as_float(item, f"{where}.move_24h_pct[{i}]")
+        if band <= 0:
+            raise ConfigError(f"{where}.move_24h_pct: bands must be positive, got {band}")
+        bands.append(band)
+    # Largest first: the widest band breached is the one worth shouting about.
+    return tuple(sorted(set(bands), reverse=True))
 
 
 def _parse_position_alerts(raw: dict[str, Any], where: str) -> PositionAlerts:
@@ -191,6 +208,7 @@ def parse_config(raw: dict[str, Any]) -> Config:
         total_pnl_below_pct=_optional_float(
             portfolio_raw, "total_pnl_below_pct", "config.portfolio_alerts"
         ),
+        move_24h_pct=_parse_move_bands(portfolio_raw, "config.portfolio_alerts"),
     )
 
     notifiers_raw = raw.get("notifiers") or [{"type": "console"}]

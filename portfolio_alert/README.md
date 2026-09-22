@@ -26,8 +26,24 @@ All commands below run from the repository root.
 "tell me if BTC loses 73 000", because that level tends to decide what the rest
 of the portfolio does.
 
-**Portfolio level** — total value bands, total profit and loss, and drawdown
-from the highest value the tool has observed.
+**Portfolio level** — total value bands, total profit and loss, drawdown from
+the highest value the tool has observed, and 24h move bands.
+
+`move_24h_pct` takes one number or several, e.g. `[2, 5]`. The move is
+reconstructed from each position's own 24h change, weighted by position size,
+so a 13% jump in a 3% holding is not mistaken for the same event as a 13% jump
+in a 30% one. Positions whose 24h change is unavailable are left out of the
+calculation rather than counted as flat, and the alert says what share of the
+portfolio it covers when that happens.
+
+Every band that is breached fires, so a +6% day with `[2, 5]` sends two
+notifications rather than one. That is deliberate: it keeps both bands marked
+as active, so a portfolio oscillating between them does not re-notify on every
+crossing. The widest band downward is a `warn`; everything else is `info`.
+
+Pick these bands against how much your portfolio actually moves. A basket of
+high-beta altcoins can cross 2% on most days, and an alert you learn to ignore
+is worse than no alert.
 
 Alerts are graded `critical` / `warn` / `info` and sorted with the worst first.
 
