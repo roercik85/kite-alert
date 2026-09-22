@@ -6,6 +6,11 @@ on:
   schedule:
     - cron: "*/30 * * * *"
   workflow_dispatch:
+    inputs:
+      test_notification:
+        description: "Send a test notification instead of checking the portfolio"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -53,10 +58,17 @@ jobs:
       - name: Validate config
         run: python -m portfolio_alert --check-config
 
+      # Proves the delivery path end to end without waiting for a real
+      # threshold breach. Touches neither prices nor the saved state.
+      - name: Send test notification
+        if: inputs.test_notification
+        run: python -m portfolio_alert --test-notification
+
       # Exits non-zero if a notification could not be delivered, so a silent
       # delivery failure shows up as a failed run. The alert itself is rolled
       # back and retried on the next run.
       - name: Check portfolio
+        if: ${{ !inputs.test_notification }}
         run: python -m portfolio_alert --quiet
 
       - name: Save alert state

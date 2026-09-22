@@ -9,7 +9,7 @@ import time
 from .config import ConfigError, load_config
 from .notify import NotifierError, build_notifiers, dispatch
 from .prices import PriceFetchError, fetch_quotes
-from .rules import build_snapshot, evaluate_all, format_report
+from .rules import INFO, Alert, build_snapshot, evaluate_all, format_report
 from .state import AlertState
 
 EXIT_OK = 0
@@ -57,6 +57,12 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="reset the stored portfolio peak to the current value (drawdown baseline)",
     )
+    parser.add_argument(
+        "--test-notification",
+        action="store_true",
+        help="send one synthetic alert through every configured notifier and exit; "
+        "verifies the delivery path without waiting for a real threshold breach",
+    )
     parser.add_argument("-q", "--quiet", action="store_true", help="do not print the table")
     parser.add_argument(
         "--fail-on-alert",
@@ -64,6 +70,35 @@ def build_parser() -> argparse.ArgumentParser:
         help=f"exit with status {EXIT_ALERTS} when any alert fires",
     )
     return parser
+
+
+def send_test_notification(config) -> int:
+    """Deliver one synthetic alert through every sink.
+
+    Deliberately bypasses prices and state: this answers "can a notification
+    reach me", which otherwise stays unproven until a real threshold breaks.
+    """
+    alert = Alert(
+        key="test:notification",
+        severity=INFO,
+        title="portfolio_alert test",
+        body=(
+            "Test notification. The delivery path works. "
+            "This is not a market alert and no threshold was crossed."
+        ),
+    )
+    notifiers = build_notifiers(config.notifiers)
+    errors = dispatch(notifiers, [alert], "")
+    for error in errors:
+        print(f"notifier failed: {error}", file=sys.stderr)
+    if errors:
+        print(
+            f"test notification failed on {len(errors)} of {len(notifiers)} notifier(s)",
+            file=sys.stderr,
+        )
+        return EXIT_ERROR
+    print(f"test notification delivered to {len(notifiers)} notifier(s)")
+    return EXIT_OK
 
 
 def run_once(args: argparse.Namespace) -> int:
@@ -141,6 +176,9 @@ def main(argv: list[str] | None = None) -> int:
                 f"{len(config.notifiers)} notifiers"
             )
             return EXIT_OK
+
+        if args.test_notification:
+            return send_test_notification(load_config(args.config))
 
         if not args.watch:
             return run_once(args)

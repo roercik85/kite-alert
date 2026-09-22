@@ -82,12 +82,17 @@ Any threshold left out is simply not checked.
 ## Run
 
 ```bash
-python3 -m portfolio_alert                 # check once, print the table, alert
-python3 -m portfolio_alert --report        # table only, no alerts, no state written
-python3 -m portfolio_alert --watch         # keep checking every 15 minutes
-python3 -m portfolio_alert --quiet         # alerts only, good for cron
-python3 -m portfolio_alert --check-config  # validate config, no network call
+python3 -m portfolio_alert                      # check once, print the table, alert
+python3 -m portfolio_alert --report             # table only, no alerts, no state written
+python3 -m portfolio_alert --watch              # keep checking every 15 minutes
+python3 -m portfolio_alert --quiet              # alerts only, good for cron
+python3 -m portfolio_alert --check-config       # validate config, no network call
+python3 -m portfolio_alert --test-notification  # send one test alert through every sink
 ```
+
+`--test-notification` fetches no prices and writes no state. It exists because
+a quiet run and a broken delivery path look the same from the outside: both
+produce no notification.
 
 Exit codes: `0` success, `1` error, `2` with `--fail-on-alert` when something fired.
 
@@ -170,7 +175,10 @@ phone to a topic does not by itself poll anything.
    from the default branch** — on a feature branch it will never fire on its
    own.
 3. Trigger it once by hand from the Actions tab (*Run workflow*) to confirm the
-   setup before relying on the schedule.
+   setup before relying on the schedule. Tick **Send a test notification** on
+   that dialog to prove the delivery path reaches your phone, rather than
+   waiting for a real threshold to break — a successful scheduled run that
+   found nothing to report looks identical to one whose push never arrived.
 
 De-duplication state and the drawdown peak are carried between runs through the
 Actions cache. If that cache is ever evicted the tool simply re-notifies on
