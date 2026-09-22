@@ -181,7 +181,7 @@ phone to a topic does not by itself poll anything.
 
 ### GitHub Actions (no machine of your own)
 
-`.github/workflows/portfolio-alert.yml` runs the check every 30 minutes.
+`.github/workflows/portfolio-alert.yml` runs the check every 5 minutes, which is the shortest interval GitHub accepts.
 
 1. Add your finished `portfolio.json` as a repository secret named
    `PORTFOLIO_CONFIG` (Settings → Secrets and variables → Actions → New
@@ -197,11 +197,15 @@ phone to a topic does not by itself poll anything.
    found nothing to report looks identical to one whose push never arrived.
 
 De-duplication state and the drawdown peak are carried between runs through the
-Actions cache. If that cache is ever evicted the tool simply re-notifies on
+Actions cache. Polling more often does not mean more notifications: an alert is
+suppressed while its condition holds, so the interval controls how quickly a
+breach is noticed, not how often it is announced. If that cache is ever evicted the tool simply re-notifies on
 conditions that are still true; it does not lose money-relevant state.
 
 Two limits worth knowing. GitHub schedules on a best-effort basis and delays
-runs under load, so treat the interval as approximate. And runners share
+or drops runs under load, and it does so most at the shortest intervals, so a
+5-minute cron in practice lands somewhere between 5 and 20 minutes apart.
+Treat the interval as a ceiling on staleness, not a promise. And runners share
 outbound IP addresses, so the free ntfy.sh tier — whose message quota is
 per-IP — can intermittently answer `429`. A failed delivery is rolled back and
 retried on the next run rather than being silently dropped, but if it recurs,

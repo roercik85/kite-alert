@@ -4,7 +4,7 @@ name: portfolio-alert
 # file has to be merged into main before any automatic run happens.
 on:
   schedule:
-    - cron: "*/30 * * * *"
+    - cron: "*/5 * * * *"
   workflow_dispatch:
     inputs:
       test_notification:
