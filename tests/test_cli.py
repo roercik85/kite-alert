@@ -223,3 +223,70 @@ class NotifierFailureTests(CliTestCase):
         self.run_with_webhook(fail=False)
         _, sent = self.run_with_webhook(fail=False)
         self.assertEqual(sent, [], "a delivered alert should stay quiet")
+
+
+class TestNotificationTests(CliTestCase):
+    """--test-notification must exercise delivery without prices or state."""
+
+    def test_makes_no_price_call(self):
+        def explode(*a, **k):
+            raise AssertionError("prices must not be fetched for a test notification")
+
+        code, out, _ = self.run_cli("--test-notification", fetch=explode)
+        self.assertEqual(code, cli.EXIT_OK)
+        self.assertIn("delivered to", out)
+
+    def test_writes_no_state_file(self):
+        self.run_cli("--test-notification")
+        self.assertFalse(self.state_path.exists())
+
+    def test_alert_reaches_the_notifier(self):
+        import portfolio_alert.notify as notify_module
+
+        cfg = dict(CONFIG, notifiers=[{"type": "webhook", "url": "https://hooks.example/x"}])
+        self.config_path.write_text(json.dumps(cfg), encoding="utf-8")
+        sent = []
+
+        class FakeResp:
+            def raise_for_status(self):
+                return None
+
+        original = notify_module.requests.post
+        notify_module.requests.post = lambda url, json=None, **k: (
+            sent.append(json) or FakeResp()
+        )
+        try:
+            code, _, _ = self.run_cli("--test-notification")
+        finally:
+            notify_module.requests.post = original
+
+        self.assertEqual(code, cli.EXIT_OK)
+        self.assertEqual(len(sent), 1)
+        self.assertIn("portfolio_alert test", sent[0]["text"])
+
+    def test_failed_delivery_is_reported_and_exits_nonzero(self):
+        import portfolio_alert.notify as notify_module
+
+        cfg = dict(CONFIG, notifiers=[{"type": "webhook", "url": "https://hooks.example/x"}])
+        self.config_path.write_text(json.dumps(cfg), encoding="utf-8")
+
+        class FakeResp:
+            def raise_for_status(self):
+                raise RuntimeError("429 quota reached")
+
+        original = notify_module.requests.post
+        notify_module.requests.post = lambda *a, **k: FakeResp()
+        try:
+            code, _, err = self.run_cli("--test-notification")
+        finally:
+            notify_module.requests.post = original
+
+        self.assertEqual(code, cli.EXIT_ERROR)
+        self.assertIn("429", err)
+        self.assertIn("test notification failed", err)
+
+    def test_invalid_config_is_caught(self):
+        self.config_path.write_text("{ broken", encoding="utf-8")
+        code, _, err = self.run_cli("--test-notification")
+        self.assertEqual(code, cli.EXIT_ERROR)
+        self.assertIn("invalid JSON", err)
